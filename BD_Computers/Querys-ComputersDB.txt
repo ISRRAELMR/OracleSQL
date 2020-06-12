@@ -1,0 +1,208 @@
+
+-- Israel Melendez Romero
+
+-- query to update column transferred_to to ‘Invalid_destination’ in Storage table if transferred_to column is equal 100. 
+update storage set
+  transfered_to=NULL
+where trim(transfered_to)='100';
+commit;
+
+--query to select all products of Dell manufacture
+select * from product
+where
+  upper(trim(maker)) = 'DELL';
+
+
+--  query to delete rows  from Storage table that have value ‘Invalid_destination’ in transferred_to column. 
+delete from storage
+  where
+    transfered_to is null;
+commit;
+
+--query to select most expensive product for every maker. Output should have maker, product model and price. 
+select all_pro.* from
+(select distinct(maker) from product) makers,
+(
+select pro.maker, pro.model, pri.price
+  from product pro, printer pri
+  where
+     pro.model=pri.model
+union all
+select pro.maker, pro.model,lap.price
+  from product pro, laptop lap
+  where
+     pro.model=lap.model
+union all
+select pro.maker, pro.model,pc.price
+   from product pro, pc pc
+   where
+       pro.model=pc.model
+) all_pro
+  where
+    upper(all_pro.maker)=upper(makers.maker)
+and price = (select max(tmp.price) from 
+               (
+                select pro.maker, pro.model, pri.price
+                    from product pro, printer pri
+                        where
+                            pro.model=pri.model
+                union all
+                select pro.maker, pro.model,lap.price
+                    from product pro, laptop lap
+                        where
+                            pro.model=lap.model
+                union all
+                select pro.maker, pro.model,pc.price
+                    from product pro, pc pc
+                        where
+                            pro.model=pc.model
+                ) tmp
+                  where upper(tmp.maker)=upper(makers.maker)
+             );
+
+
+--query to select overall amount of laptops that Hitachi manufactures.
+select count(*) Overall_laptos
+  from product pro, laptop lap
+  where
+     pro.model=lap.model
+and upper(pro.maker)='HITACHI'; 
+
+
+--query to select all devices ordered from most expensive ones to cheapest. Output should have serial number, maker, price, type. 
+select all_pro.* from
+(
+select pri.serial_number, pro.maker, pri.price, pro.type
+  from product pro, printer pri
+  where
+     pro.model=pri.model
+union all
+select lap.serial_number, pro.maker, lap.price, pro.type
+  from product pro, laptop lap
+  where
+     pro.model=lap.model
+union all
+select pc.serial_number, pro.maker, pc.price, pro.type
+   from product pro, pc pc
+   where
+       pro.model=pc.model
+) all_pro
+order by all_pro.price desc;
+
+
+--query to select makers that make more printers than pc\laptops. 
+
+select maker from
+(
+select all_pro.maker, sum(decode(upper(all_pro.type),'PRINTER',1,0)) printers, sum(decode(upper(all_pro.type),'LAPTOP',1,0)) laptops, 
+       sum(decode(upper(all_pro.type),'PC',1,0)) pcs  from
+(
+select pri.serial_number, pro.maker, pri.price, pro.type
+  from product pro, printer pri
+  where
+     pro.model=pri.model
+union all
+select lap.serial_number, pro.maker, lap.price, pro.type
+  from product pro, laptop lap
+  where
+     pro.model=lap.model
+union all
+select pc.serial_number, pro.maker, pc.price, pro.type
+   from product pro, pc pc
+   where
+       pro.model=pc.model
+) all_pro
+group by all_pro.maker
+) total
+where
+    total.printers > total.laptops;
+
+
+
+--query to select most expensive PC without CD drive for makers who manufacture only PCs. Output should have serial_number, maker, price.
+select ppc.serial_number, pr.maker,ppc.price from
+(select total.maker from
+(
+select all_pro.maker, sum(decode(upper(all_pro.type),'PRINTER',1,0)) printers, sum(decode(upper(all_pro.type),'LAPTOP',1,0)) laptops, 
+       sum(decode(upper(all_pro.type),'PC',1,0)) pcs  from
+(
+select pri.serial_number, pro.maker, pri.price, pro.type
+  from product pro, printer pri
+  where
+     pro.model=pri.model
+union all
+select lap.serial_number, pro.maker, lap.price, pro.type
+  from product pro, laptop lap
+  where
+     pro.model=lap.model
+union all
+select pc.serial_number, pro.maker, pc.price, pro.type
+   from product pro, pc pc
+   where
+       pro.model=pc.model
+) all_pro
+group by all_pro.maker
+) total
+where
+    total.printers = 0
+and total.laptops = 0
+) makers, product pr, pc ppc
+  where
+    upper(pr.maker)=upper(makers.maker)
+and pr.model = ppc.model    
+and ppc.price = (select max(tmp.price) from 
+               (select pro.maker, pro.model,pc.price
+                    from product pro, pc pc
+                        where
+                            pro.model=pc.model
+                        and pc.cd is null    
+                ) tmp
+                  where upper(tmp.maker)=upper(makers.maker));
+
+
+
+-- query to select what's cheaper pc or laptop (considering speed, ram, hd). If maker doesn't manufacture pc then laptop should be shown as cheapest and vice versa. As input you have speed, ram, hd. as output you should show at least maker, serial_number, speed, ram, hd, price
+-- for this test i use the follow values for variables
+--    &1= 600 ,  &2=4096 ,  &3='600'
+--    for a productive query we need to replace the values for &1, &2 and &3 respectively
+select * from
+(
+select pro.maker, pro.model, lap.serial_number, lap.speed, lap.ram, lap.hd, lap.price, pro.type
+  from product pro, laptop lap
+  where
+       pro.model=lap.model
+   and lap.speed = 600  -- variable 1 &1
+   and lap.ram=4096     -- variable 2 &2
+   and lap.hd='600'     -- variable 3 &3
+union all
+select pro.maker, pro.model, pc.serial_number, pc.speed, pc.ram, pc.hd, pc.price, pro.type
+   from product pro, pc pc
+   where
+       pro.model=pc.model
+   and pc.speed = 600   -- variable 1 &1
+   and pc.ram=4096      -- variable 2 &2
+   and pc.hd='600'      -- variable 3 &3
+) total
+  where
+     total.price = (select min(tmp.price) from 
+                   (
+                    select pro.maker, pro.model,lap.price
+                    from product pro, laptop lap
+                        where
+                                pro.model=lap.model
+                            and lap.speed = 600   -- variable 1 &1
+                            and lap.ram=4096      -- variable 2 &2
+                            and lap.hd='600'      -- variable 3 &3
+                    union all
+                    select pro.maker, pro.model,pc.price
+                    from product pro, pc pc
+                        where
+                            pro.model=pc.model
+                            and pc.speed = 600    -- variable 1 &1
+                            and pc.ram=4096       -- variable 2 &2
+                            and pc.hd='600'       -- variable 3 &3
+                    ) tmp
+                      where upper(tmp.maker)=upper(total.maker));
+
+
+
